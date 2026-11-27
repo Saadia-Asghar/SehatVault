@@ -20,7 +20,7 @@ contract SehatVault {
     event RecordRegistered(bytes32 indexed patient, bytes32 commitment);
     event ShareCreated(bytes32 indexed shareId, bytes32 indexed patient, uint64 expiresAt);
     event ShareRevoked(bytes32 indexed shareId);
-    event ShareAccessed(bytes32 indexed shareId, uint64 at);
+    event ShareAccessed(bytes32 indexed shareId, uint64 accessedAt);
     event RelayerSet(address relayer, bool allowed);
 
     modifier onlyOwner()   { require(msg.sender == owner, "not owner"); _; }

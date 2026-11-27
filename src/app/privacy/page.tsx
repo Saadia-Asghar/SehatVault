@@ -42,9 +42,9 @@ export default function PrivacyPage() {
   async function retry(id: string) {
     setResults((r) => ({ ...r, [id]: "Anchoring…" }));
     try {
-      await api(`/api/records/${id}`, { method: "POST" });
+      const res = await api<{ alreadyAnchored?: boolean }>(`/api/records/${id}`, { method: "POST" });
       await load();
-      setResults((r) => ({ ...r, [id]: "Anchored ✓" }));
+      setResults((r) => ({ ...r, [id]: res.alreadyAnchored ? "Already on Avalanche ✓" : "Anchored ✓" }));
     } catch (e) {
       setResults((r) => ({ ...r, [id]: (e as Error).message }));
     }

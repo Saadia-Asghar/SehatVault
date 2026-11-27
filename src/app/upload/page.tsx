@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import AppShell from "@/components/AppShell";
 import { api } from "@/lib/client";
+import { shrinkImage } from "@/lib/image";
 import type { Extraction, Medication, LabResult } from "@/lib/gemini";
 
 type Phase = "pick" | "reading" | "review" | "saving" | "done";
@@ -15,8 +16,9 @@ export default function UploadPage() {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<{ explorer: string | null; anchorError: string | null } | null>(null);
 
-  async function onPick(f: File | undefined) {
-    if (!f) return;
+  async function onPick(picked: File | undefined) {
+    if (!picked) return;
+    const f = await shrinkImage(picked);
     setFile(f);
     setPreview(f.type.startsWith("image/") ? URL.createObjectURL(f) : null);
     setError("");

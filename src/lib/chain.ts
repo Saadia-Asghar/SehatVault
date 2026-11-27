@@ -34,16 +34,27 @@ async function wait(hash: Hex) {
   return hash;
 }
 
+/**
+ * One relayer key signs everything, so sends are queued to stop concurrent requests on this
+ * instance from picking the same nonce. Only the send is queued; receipts are awaited in parallel.
+ */
+let sendQueue: Promise<unknown> = Promise.resolve();
+function serialSend(send: () => Promise<Hex>): Promise<Hex> {
+  const run = sendQueue.then(send, send);
+  sendQueue = run.catch(() => undefined);
+  return run;
+}
+
 export const chain = {
   registerRecord: async (patient: Hex, commitment: Hex) =>
-    wait(await c().wallet.writeContract({ address: c().address, abi, functionName: "registerRecord", args: [patient, commitment] })),
+    wait(await serialSend(() => c().wallet.writeContract({ address: c().address, abi, functionName: "registerRecord", args: [patient, commitment] }))),
   createShare: async (id: Hex, patient: Hex, scope: Hex, expiresAt: bigint) =>
-    wait(await c().wallet.writeContract({ address: c().address, abi, functionName: "createShare", args: [id, patient, scope, expiresAt] })),
+    wait(await serialSend(() => c().wallet.writeContract({ address: c().address, abi, functionName: "createShare", args: [id, patient, scope, expiresAt] }))),
   revokeShare: async (id: Hex, patient: Hex) =>
-    wait(await c().wallet.writeContract({ address: c().address, abi, functionName: "revokeShare", args: [id, patient] })),
+    wait(await serialSend(() => c().wallet.writeContract({ address: c().address, abi, functionName: "revokeShare", args: [id, patient] }))),
   /** Sends without waiting for the receipt so the doctor page stays fast. */
   logAccess: (id: Hex) =>
-    c().wallet.writeContract({ address: c().address, abi, functionName: "logAccess", args: [id] }),
+    serialSend(() => c().wallet.writeContract({ address: c().address, abi, functionName: "logAccess", args: [id] })),
   isShareActive: (id: Hex) =>
     c().pub.readContract({ address: c().address, abi, functionName: "isShareActive", args: [id] }),
   verifyRecord: (patient: Hex, commitment: Hex) =>

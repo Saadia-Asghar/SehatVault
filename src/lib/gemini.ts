@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { DOC_TYPES } from "./validate";
 
 let client: GoogleGenAI | null = null;
 export const ai = () => (client ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }));
@@ -61,9 +62,11 @@ export async function extractDocument(base64: string, mimeType: string): Promise
     config: { systemInstruction: EXTRACT_SYSTEM, responseMimeType: "application/json", temperature: 0 },
   });
   const d = parseJson<Partial<Extraction>>(res.text ?? "{}");
+  const docType = DOC_TYPES.includes(d.doc_type as Extraction["doc_type"]) ? (d.doc_type as Extraction["doc_type"]) : "other";
+  const docDate = typeof d.doc_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d.doc_date) ? d.doc_date : null;
   return {
-    doc_type: d.doc_type ?? "other",
-    doc_date: d.doc_date ?? null,
+    doc_type: docType,
+    doc_date: docDate,
     doctor: d.doctor ?? null,
     facility: d.facility ?? null,
     complaint_or_reason: d.complaint_or_reason ?? null,
