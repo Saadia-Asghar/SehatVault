@@ -1,16 +1,17 @@
-import { handle, requireUser, HttpError } from "@/lib/server";
+import { handle, requireUser } from "@/lib/server";
 import { extractDocument } from "@/lib/gemini";
+import { aiLimiter, requireRate } from "@/lib/ratelimit";
+import { checkUpload } from "@/lib/validate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export const POST = handle(async (req) => {
-  await requireUser(req);
+  const ctx = await requireUser(req);
   const form = await req.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) throw new HttpError(400, "No file uploaded");
-  if (file.size > 10 * 1024 * 1024) throw new HttpError(400, "File too large (max 10 MB)");
+  const { file, mime } = checkUpload(form.get("file"));
+  requireRate(aiLimiter, ctx.userId);
   const buf = Buffer.from(await file.arrayBuffer());
-  const extraction = await extractDocument(buf.toString("base64"), file.type || "image/jpeg");
+  const extraction = await extractDocument(buf.toString("base64"), mime);
   return Response.json({ extraction });
 });

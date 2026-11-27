@@ -46,9 +46,10 @@ create table if not exists share_permissions (
   token_hash text not null unique,
   brief text,
   expires_at timestamptz not null,
-  status text default 'active',
+  status text not null default 'pending' check (status in ('pending', 'active', 'revoked')),
   tx_hash text,
   revoke_tx_hash text,
+  last_anchor_at timestamptz,
   created_at timestamptz default now()
 );
 
@@ -65,6 +66,15 @@ create table if not exists access_logs (
   result text,
   tx_hash text
 );
+
+create index if not exists access_logs_share_time on access_logs (share_id, accessed_at desc);
+create index if not exists medical_records_user on medical_records (user_id, doc_date desc);
+
+-- Already ran an older version of this file? Run these once as well:
+--   alter table share_permissions alter column status set default 'pending';
+--   alter table share_permissions alter column status set not null;
+--   alter table share_permissions add constraint share_status_values check (status in ('pending', 'active', 'revoked'));
+--   alter table share_permissions add column if not exists last_anchor_at timestamptz;
 
 -- All app access goes through server routes (service role key) that always
 -- filter by the signed-in user. RLS with no policies blocks direct client access.

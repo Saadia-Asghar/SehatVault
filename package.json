@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "contract:compile": "tsx scripts/deploy-contract.ts --compile-only",
+    "contract:deploy": "node --env-file=.env.local --import tsx scripts/deploy-contract.ts",
+    "seed": "node --env-file=.env.local --import tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@google/genai": "^3.6.1",
@@ -26,9 +32,13 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.12",
     "eslint": "^9",
     "eslint-config-next": "15.5.29",
+    "solc": "^0.8.39",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vitest": "^4.1.12"
   }
 }

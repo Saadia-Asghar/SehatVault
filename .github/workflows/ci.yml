@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests with coverage (fails under 80%)
+        run: npm run test:coverage
+        env:
+          VITE_CONFIG_NATIVE_IGNORE_WARNING: "true"
+
+      - name: Compile contract
+        run: npm run contract:compile
+
+      # No secrets needed: Supabase, Gemini and the chain clients are created lazily at request time.
+      - name: Build
+        run: npm run build

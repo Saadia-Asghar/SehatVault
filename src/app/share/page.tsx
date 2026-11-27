@@ -34,11 +34,15 @@ export default function SharePage() {
   useEffect(load, [load]);
 
   async function revoke(id: string) {
-    if (!confirm("Revoke this access? The doctor will no longer be able to open the link.")) return;
+    const alreadyRevoked = shares?.find((s) => s.id === id)?.state === "revoked";
+    if (!alreadyRevoked && !confirm("Revoke this access? The doctor will no longer be able to open the link.")) return;
     setBusy(id);
     setError("");
     try {
-      await api(`/api/share/${id}/revoke`, { method: "POST" });
+      const res = await api<{ chainPending?: boolean }>(`/api/share/${id}/revoke`, { method: "POST" });
+      if (res.chainPending) {
+        setError("Access is revoked and the link no longer opens. Recording it on Avalanche failed. Press Revoke again later to retry.");
+      }
       load();
     } catch (e) {
       setError((e as Error).message);
@@ -74,6 +78,11 @@ export default function SharePage() {
             {s.state === "active" && (
               <button className="btn-danger" disabled={busy === s.id} onClick={() => revoke(s.id)}>
                 {busy === s.id ? "Revoking on Avalanche…" : "Revoke access"}
+              </button>
+            )}
+            {s.state === "revoked" && !s.revoke_explorer && (
+              <button className="btn-secondary px-3 py-1 text-sm" disabled={busy === s.id} onClick={() => revoke(s.id)}>
+                {busy === s.id ? "Checking Avalanche…" : "Record revocation on Avalanche"}
               </button>
             )}
           </div>

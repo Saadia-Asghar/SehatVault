@@ -1,11 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { patientChainId, type Hex } from "./hash";
+import { HttpError, toErrorResponse } from "./errors";
 
-export class HttpError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
+export { HttpError, errorMessage } from "./errors";
 
 export const admin = (): SupabaseClient =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -23,7 +20,7 @@ export async function requireUser(req: Request): Promise<Ctx> {
   if (error || !data.user) throw new HttpError(401, "Session expired, please sign in again");
   const user = data.user;
   const patientId = patientChainId(user.id);
-  await db.from("profiles").upsert(
+  const { error: profileErr } = await db.from("profiles").upsert(
     {
       user_id: user.id,
       display_name: (user.user_metadata?.full_name as string | undefined) ?? user.email,
@@ -31,22 +28,18 @@ export async function requireUser(req: Request): Promise<Ctx> {
     },
     { onConflict: "user_id", ignoreDuplicates: true },
   );
+  if (profileErr) console.error("profile upsert failed", profileErr.message);
   return { db, userId: user.id, patientId };
 }
 
 export function handle<C = { params: Promise<Record<string, string>> }>(
   fn: (req: Request, ctx: C) => Promise<Response>,
 ) {
-  return async (req: Request, ctx: C) => {
+  return async (req: Request, ctx: C): Promise<Response> => {
     try {
       return await fn(req, ctx);
     } catch (e) {
-      const status = e instanceof HttpError ? e.status : 500;
-      const message = e instanceof Error ? e.message : "Unexpected error";
-      if (status === 500) console.error(e);
-      return Response.json({ error: message }, { status });
+      return toErrorResponse(e);
     }
   };
 }
-
-export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));

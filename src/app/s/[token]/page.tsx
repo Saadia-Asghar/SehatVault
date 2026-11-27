@@ -17,25 +17,60 @@ type Rec = {
 };
 type View =
   | { state: "active"; patient: string; brief: string | null; expires_at: string; records: Rec[]; contract: string | null }
-  | { state: "invalid" | "expired" | "revoked" | "error" };
+  | { state: "invalid" | "expired" | "revoked" | "error" | "rate_limited" | "unavailable" };
 
 const MESSAGES: Record<string, string> = {
   invalid: "This link is not valid.",
   expired: "This access has expired.",
   revoked: "The patient has revoked this access.",
   error: "Could not load records. Please try again.",
+  rate_limited: "Too many requests. Please wait a minute and refresh.",
+  unavailable: "Could not confirm this permission on Avalanche right now. Please refresh in a moment.",
 };
+
+const RETRYABLE = new Set(["error", "rate_limited", "unavailable"]);
+
+function timeLeft(expiresAt: string, now: number): string {
+  const ms = new Date(expiresAt).getTime() - now;
+  if (ms <= 0) return "expired";
+  const mins = Math.floor(ms / 60_000);
+  const h = Math.floor(mins / 60);
+  const d = Math.floor(h / 24);
+  if (d >= 1) return `${d}d ${h % 24}h left`;
+  if (h >= 1) return `${h}h ${mins % 60}m left`;
+  return `${Math.max(1, mins)}m left`;
+}
+
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return now;
+}
 
 export default function DoctorView() {
   const { token } = useParams<{ token: string }>();
   const [view, setView] = useState<View | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const now = useNow(30_000);
 
   useEffect(() => {
-    fetch(`/api/s/${token}`, { cache: "no-store" })
+    const controller = new AbortController();
+    fetch(`/api/s/${token}`, { cache: "no-store", signal: controller.signal })
       .then((r) => r.json())
       .then((d) => setView(d.state ? d : { state: "error" }))
-      .catch(() => setView({ state: "error" }));
-  }, [token]);
+      .catch((e) => {
+        if (e.name !== "AbortError") setView({ state: "error" });
+      });
+    return () => controller.abort();
+  }, [token, attempt]);
+
+  const retry = () => {
+    setView(null);
+    setAttempt((n) => n + 1);
+  };
 
   if (!view) return <div className="grid min-h-dvh place-items-center text-slate-500">Loading shared records…</div>;
 
@@ -45,7 +80,11 @@ export default function DoctorView() {
         <div className="card space-y-2">
           <div className="text-5xl">🔒</div>
           <p className="font-display text-xl font-bold">{MESSAGES[view.state]}</p>
-          <p className="text-sm text-slate-600">Ask the patient to share a new QR code from SehatVault.</p>
+          {RETRYABLE.has(view.state) ? (
+            <button className="btn-secondary" onClick={retry}>Try again</button>
+          ) : (
+            <p className="text-sm text-slate-600">Ask the patient to share a new QR code from SehatVault.</p>
+          )}
         </div>
       </div>
     );
@@ -56,7 +95,10 @@ export default function DoctorView() {
       <header className="space-y-1">
         <span className="font-display text-xl font-extrabold">Sehat<span className="text-brand">Vault</span></span>
         <p className="text-sm text-slate-600">
-          Shared by <b>{view.patient}</b> · read-only · expires {new Date(view.expires_at).toLocaleString()}
+          Shared by <b>{view.patient}</b> · read-only ·{" "}
+          <span className="font-semibold text-brand" title={new Date(view.expires_at).toLocaleString()}>
+            {timeLeft(view.expires_at, now)}
+          </span>
         </p>
       </header>
 
@@ -95,7 +137,7 @@ export default function DoctorView() {
                 ))}
               </ul>
             )}
-            {r.file_url && <a href={r.file_url} target="_blank" rel="noreferrer" className="text-sm text-brand underline">Open original document ↗</a>}
+            {r.file_url && <a href={r.file_url} target="_blank" rel="noopener noreferrer" className="text-sm text-brand underline">Open original document ↗</a>}
           </div>
         ))}
       </section>
